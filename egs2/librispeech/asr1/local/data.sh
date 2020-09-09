@@ -13,7 +13,7 @@ SECONDS=0
 
 
 stage=1
-stop_stage=100000
+stop_stage=3
 data_url=www.openslr.org/resources/12
 train_set="train_960"
 train_dev="dev"
@@ -39,7 +39,7 @@ fi
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     if [ ! -e "${LIBRISPEECH}/LibriSpeech/LICENSE.TXT" ]; then
 	echo "stage 1: Data Download to ${LIBRISPEECH}"
-	for part in dev-clean test-clean dev-other test-other train-clean-100 train-clean-360 train-other-500; do
+	for part in dev-clean test-clean; do
             local/download_and_untar.sh ${LIBRISPEECH} ${data_url} ${part}
 	done
     else
@@ -49,7 +49,7 @@ fi
 
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
     log "stage 2: Data Preparation"
-    for part in dev-clean test-clean dev-other test-other train-clean-100 train-clean-360 train-other-500; do
+    for part in dev-clean test-clean; do
         # use underscore-separated names in data directories.
         local/data_prep.sh ${LIBRISPEECH}/LibriSpeech/${part} data/${part//-/_}
     done
@@ -57,8 +57,8 @@ fi
 
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
     log "stage 3: combine all training and development sets"
-    utils/combine_data.sh --extra_files utt2num_frames data/${train_set} data/train_clean_100 data/train_clean_360 data/train_other_500
-    utils/combine_data.sh --extra_files utt2num_frames data/${train_dev} data/dev_clean data/dev_other
+    utils/combine_data.sh --extra_files utt2num_frames data/${train_set} data/dev_clean
+    utils/combine_data.sh --extra_files utt2num_frames data/${train_dev} data/dev_clean
 fi
 
 if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
