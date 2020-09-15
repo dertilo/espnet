@@ -5,9 +5,9 @@ set -e
 set -u
 set -o pipefail
 
-train_set="train_960"
-valid_set="dev"
-test_sets="test_clean dev_clean"
+train_set="debug_train"
+valid_set="debug_dev"
+test_sets="dev_clean"
 
 asr_config=conf/tuning/train_asr_transformer_tiny.yaml
 inference_config=conf/decode_asr.yaml

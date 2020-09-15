@@ -15,8 +15,8 @@ SECONDS=0
 stage=1
 stop_stage=3
 data_url=www.openslr.org/resources/12
-train_set="train_960"
-train_dev="dev"
+train_set="debug_train"
+train_dev="debug_dev"
 
 log "$0 $*"
 . utils/parse_options.sh
@@ -39,7 +39,7 @@ fi
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     if [ ! -e "${LIBRISPEECH}/LibriSpeech/LICENSE.TXT" ]; then
 	echo "stage 1: Data Download to ${LIBRISPEECH}"
-	for part in dev-clean test-clean; do
+	for part in dev-clean; do
             local/download_and_untar.sh ${LIBRISPEECH} ${data_url} ${part}
 	done
     else
@@ -49,7 +49,7 @@ fi
 
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
     log "stage 2: Data Preparation"
-    for part in dev-clean test-clean; do
+    for part in dev-clean; do
         # use underscore-separated names in data directories.
         local/data_prep.sh ${LIBRISPEECH}/LibriSpeech/${part} data/${part//-/_}
     done
