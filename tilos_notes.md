@@ -30,6 +30,6 @@ train_dev="debug_dev"
 ```
 
 * python command
-```shell script
-/home/tilo/code/SPEECH/espnet/tools/venv/bin/python3 /home/tilo/code/SPEECH/espnet/espnet2/bin/asr_train.py --use_preprocessor true --bpemodel data/token_list/bpe_unigram5000/bpe.model --token_type bpe --token_list data/token_list/bpe_unigram5000/tokens.txt --non_linguistic_symbols none --cleaner none --g2p none --valid_data_path_and_name_and_type dump/raw/debug_dev/wav.scp,speech,sound --valid_data_path_and_name_and_type dump/raw/debug_dev/text,text,text --valid_shape_file exp/asr_stats_raw/valid/speech_shape --valid_shape_file exp/asr_stats_raw/valid/text_shape.bpe --resume true --fold_length 5000 --fold_length 150 --output_dir exp/asr_train_asr_transformer_tiny_raw_bpe --config conf/tuning/train_asr_transformer_tiny.yaml --frontend_conf fs=16k --normalize=global_mvn --normalize_conf stats_file=exp/asr_stats_raw/train/feats_stats.npz --train_data_path_and_name_and_type dump/raw/debug_train/wav.scp,speech,sound --train_data_path_and_name_and_type dump/raw/debug_train/text,text,text --train_shape_file exp/asr_stats_raw/train/speech_shape --train_shape_file exp/asr_stats_raw/train/text_shape.bpe --ngpu 0 --multiprocessing_distributed False
-```
+0. `source tools/venv/bin/activate`
+1. `cd egs2/librispeech/asr1`
+2. `LRU_CACHE_CAPACITY=1 python ~/code/SPEECH/espnet/espnet2/bin/main.py` see [Memory leak when evaluating model on CPU with dynamic size tensor input](https://github.com/pytorch/pytorch/issues/29893) and [here](https://raberrytv.wordpress.com/2020/03/25/pytorch-free-your-memory/)
