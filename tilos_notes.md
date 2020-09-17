@@ -33,3 +33,10 @@ train_dev="debug_dev"
 0. `source tools/venv/bin/activate`
 1. `cd egs2/librispeech/asr1`
 2. `LRU_CACHE_CAPACITY=1 python ~/code/SPEECH/espnet/espnet2/bin/main.py` see [Memory leak when evaluating model on CPU with dynamic size tensor input](https://github.com/pytorch/pytorch/issues/29893) and [here](https://raberrytv.wordpress.com/2020/03/25/pytorch-free-your-memory/)
+
+### files really needed
+* in `dump/raw/<dataset-name>`: `text`, `wav.scp`
+* in `exp/asr_stats_raw/train/`: `speech_shape`, `text_shape.bpe`
+* in `data/token_list/bpe_unigram5000/`: `bpe.model  bpe.vocab  tokens.txt  train.txt`
+### strange things
+* global_mvn see GlobalMVN-class; does normalize globally (over entire dataset) -> why? isn't there a normalization for each signal that would made such globel normalization obsolet?
