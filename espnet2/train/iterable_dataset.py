@@ -14,6 +14,7 @@ import soundfile
 import torch
 from typeguard import check_argument_types
 
+from espnet2.fileio.sound_scp import load_audio
 from espnet2.train.dataset import ESPnetDataset
 
 if LooseVersion(torch.__version__) >= LooseVersion("1.2"):
@@ -22,7 +23,8 @@ else:
     from torch.utils.data.dataset import Dataset as IterableDataset
 
 DATA_TYPES = {
-    "sound": lambda x: soundfile.read(x)[0],
+    # "sound": lambda x: soundfile.read(x)[0], # TODO(tilo): WTF!?
+    "sound": lambda x: load_audio(x, target_rate=16_000), # TODO(tilo): sample-rate hard-coded here!
     # NOTE(kamo): load_ark can load wav file.
     "pipe_wav": lambda x: kaldiio.load_mat(x)[1].astype(np.float32),
     "kaldi_ark": lambda x: kaldiio.load_mat(x),
