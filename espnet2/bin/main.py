@@ -112,6 +112,7 @@ def run_asr_task(
 
 
 if __name__ == "__main__":
+    os.environ["LRU_CACHE_CAPACITY"]=str(1) #see [Memory leak when evaluating model on CPU with dynamic size tensor input](https://github.com/pytorch/pytorch/issues/29893) and [here](https://raberrytv.wordpress.com/2020/03/25/pytorch-free-your-memory/)
     import shlex
 
     num_workers = 0
