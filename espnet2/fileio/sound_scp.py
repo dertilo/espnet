@@ -1,4 +1,6 @@
 import collections.abc
+import numpy
+import torchaudio
 from pathlib import Path
 from typing import Union
 
@@ -8,6 +10,21 @@ from typeguard import check_argument_types
 
 from espnet2.fileio.read_text import read_2column_text
 
+def load_audio(audio_file: str, target_rate=16_000) -> numpy.ndarray:
+    si, _ = torchaudio.info(audio_file)
+    # normalize_denominator = 1 << si.precision
+    normalize_denominator = 1 << 31 # TODO(tilo): leads to same results as soundfile.read
+    sound, sample_rate = torchaudio.load(
+        audio_file, normalization=normalize_denominator
+    )
+    if sample_rate != target_rate:
+        resampler = torchaudio.transforms.Resample(
+            orig_freq=sample_rate, new_freq=target_rate
+        )
+        sound = resampler(sound)
+
+    y = sound.squeeze().numpy()
+    return y
 
 class SoundScpReader(collections.abc.Mapping):
     """Reader class for 'wav.scp'.
@@ -42,8 +59,12 @@ class SoundScpReader(collections.abc.Mapping):
         wav = self.data[key]
         if self.normalize:
             # soundfile.read normalizes data to [-1,1] if dtype is not given
-            array, rate = soundfile.read(wav, always_2d=self.always_2d)
+            # array, rate = soundfile.read(wav, always_2d=self.always_2d)
+            rate = 16_000
+            array = load_audio(wav, target_rate=rate)
+
         else:
+            assert False
             array, rate = soundfile.read(
                 wav, dtype=self.dtype, always_2d=self.always_2d
             )
