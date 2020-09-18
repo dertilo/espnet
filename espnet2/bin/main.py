@@ -6,6 +6,7 @@ from espnet2.bin.tokenize_text import tokenize, get_parser
 from espnet2.tasks.asr import ASRTask
 from util import data_io, util_methods
 import sentencepiece as spm
+import shlex
 
 
 def build_manifest_files(
@@ -111,45 +112,42 @@ def run_asr_task(
     ASRTask.main(args=args)
 
 
-if __name__ == "__main__":
-    os.environ["LRU_CACHE_CAPACITY"]=str(1) #see [Memory leak when evaluating model on CPU with dynamic size tensor input](https://github.com/pytorch/pytorch/issues/29893) and [here](https://raberrytv.wordpress.com/2020/03/25/pytorch-free-your-memory/)
-    import shlex
-
-    num_workers = 0
-    vocab_size = 500
-    limit = 200 #just for debug
-
+def run_espnet(
+    vocab_size=500,
+    limit=200,  # just for debug
+    config="conf/tuning/train_asr_transformer_tiny.yaml",
+    num_workers=0,
+    num_gpus=0,
+):
+    global tokenizer_path, stats_dir, train_manifest_path, dev_manifest_path
     base_path = "/tmp/espnet_data"
     tokenizer_path = f"{base_path}/bpe_tokenizer_unigram_{vocab_size}"
-
     stats_dir = f"{base_path}/stats"
-    config = "conf/tuning/train_asr_transformer_tiny.yaml"
-
     manifest_path = f"{base_path}/manifests"
-
     train_name = "debug_train"
     valid_name = "debug_valid"
-
     train_manifest_path = f"{manifest_path}/{train_name}"
     dev_manifest_path = f"{manifest_path}/{valid_name}"
-
     build_manifest_files(train_manifest_path, limit=limit)
     build_manifest_files(dev_manifest_path, limit=limit)
-
     if not os.path.isdir(tokenizer_path):
         train_tokenizer(vocab_size, tokenizer_path)
-
     if not os.path.isdir(stats_dir):
         run_asr_task(collect_stats=True, output_dir=f"{stats_dir}")
 
-    assert os.path.isdir(stats_dir)
-
-    num_gpus = 0
-    is_distributed = False
     run_asr_task(
-        num_workers=0,
-        output_dir=f"{base_path}/{config.split('/')[-1].replace('.yaml','')}",
+        num_workers=num_workers,
+        output_dir=f"{base_path}/{config.split('/')[-1].replace('.yaml', '')}",
+        num_gpus=num_gpus,
+        is_distributed=False,
     )
+
+
+if __name__ == "__main__":
+    os.environ["LRU_CACHE_CAPACITY"] = str(1)
+    # see [Memory leak when evaluating model on CPU with dynamic size tensor input](https://github.com/pytorch/pytorch/issues/29893) and [here](https://raberrytv.wordpress.com/2020/03/25/pytorch-free-your-memory/)
+
+    run_espnet()
 
     """
     LRU_CACHE_CAPACITY=1 python ~/code/SPEECH/espnet/espnet2/bin/main.py
