@@ -1,8 +1,66 @@
-from espnet2.tasks.asr import ASRTask
+import os
 
-if __name__ == '__main__':
+import argparse
+
+from espnet2.tasks.asr import ASRTask
+from util import data_io
+
+
+def build_manifest_files(
+    manifest_path="/tmp",
+    dataset_path="/home/tilo/data/asr_data/ENGLISH/LibriSpeech/dev-clean_preprocessed",
+):
+    os.makedirs(manifest_path,exist_ok=True)
+
+    g = data_io.read_jsonl(f"{dataset_path}/manifest.jsonl.gz")
+    data_io.write_lines(
+        f"{manifest_path}/wav.scp",
+        (
+            f"{d['audio_file'].replace('.mp3', '')}\t{dataset_path}/{d['audio_file']}"
+            for d in g
+        ),
+    )
+    g = data_io.read_jsonl(f"{dataset_path}/manifest.jsonl.gz")
+    data_io.write_lines(
+        f"{manifest_path}/text",
+        (f"{d['audio_file'].replace('.mp3', '')}\t{d['text']}" for d in g),
+    )
+
+
+if __name__ == "__main__":
     import shlex
-    argString = '--use_preprocessor true --bpemodel data/token_list/bpe_unigram5000/bpe.model --seed 42 --num_workers 0 --token_type bpe --token_list data/token_list/bpe_unigram5000/tokens.txt --non_linguistic_symbols none --cleaner none --g2p none --valid_data_path_and_name_and_type dump/raw/debug_dev/wav.scp,speech,sound --valid_data_path_and_name_and_type dump/raw/debug_dev/text,text,text --valid_shape_file exp/asr_stats_raw/valid/speech_shape --valid_shape_file exp/asr_stats_raw/valid/text_shape.bpe --resume true --fold_length 5000 --fold_length 150 --output_dir exp/asr_train_asr_transformer_tiny_raw_bpe --config conf/tuning/train_asr_transformer_tiny.yaml --frontend_conf fs=16k --train_data_path_and_name_and_type dump/raw/debug_train/wav.scp,speech,sound --train_data_path_and_name_and_type dump/raw/debug_train/text,text,text --train_shape_file exp/asr_stats_raw/train/speech_shape --train_shape_file exp/asr_stats_raw/train/text_shape.bpe --ngpu 0 --multiprocessing_distributed False'
+    num_workers=0
+    tokenizer_path = 'data/token_list/bpe_unigram5000'
+    bpe_model = f'{tokenizer_path}/bpe.model'
+    valid_speech_shape = 'exp/asr_stats_raw/valid/speech_shape'
+    valid_text_shape_bpe = 'exp/asr_stats_raw/valid/text_shape.bpe'
+    output_dir = 'exp/asr_train_asr_transformer_tiny_raw_bpe'
+    config = 'conf/tuning/train_asr_transformer_tiny.yaml'
+
+    manifest_path = '/tmp/espnet_manifests'
+
+    train_manifest_path = f'{manifest_path}/debug_train'
+    dev_manifest_path = f'{manifest_path}/debug_dev'
+    build_manifest_files(train_manifest_path)
+    build_manifest_files(dev_manifest_path)
+    shape_path = 'exp/asr_stats_raw/train'
+    num_gpus = 0
+    is_distributed = False
+    argString = f"--use_preprocessor true --bpemodel {bpe_model} --seed 42 --num_workers {num_workers} --token_type bpe " \
+                f"--token_list {tokenizer_path}/tokens.txt " \
+                f"--g2p none --non_linguistic_symbols none --cleaner none " \
+                f"--valid_data_path_and_name_and_type {dev_manifest_path}/wav.scp,speech,sound " \
+                f"--valid_data_path_and_name_and_type {dev_manifest_path}/text,text,text " \
+                f"--valid_shape_file {valid_speech_shape} --valid_shape_file {valid_text_shape_bpe} " \
+                f"--resume true --fold_length 5000 --fold_length 150 " \
+                f"--output_dir {output_dir} --config {config} --frontend_conf fs=16k " \
+                f"--train_data_path_and_name_and_type {train_manifest_path}/wav.scp,speech,sound " \
+                f"--train_data_path_and_name_and_type {train_manifest_path}/text,text,text " \
+                f"--train_shape_file {shape_path}/speech_shape " \
+                f"--train_shape_file {shape_path}/text_shape.bpe " \
+                f"--ngpu {num_gpus} " \
+                f"--multiprocessing_distributed {is_distributed}"
+
     parser = ASRTask.get_parser()
     args = parser.parse_args(shlex.split(argString))
     ASRTask.main(args=args)

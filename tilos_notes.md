@@ -33,11 +33,11 @@ train_dev="debug_dev"
 0. `source tools/venv/bin/activate`
 1. `cd egs2/librispeech/asr1`
 1. `python train_tokenizer.py` -> `data/token_list/bpe_unigram5000/`: `bpe.model  bpe.vocab  tokens.txt  train.txt`
-1. only once: `./run_minimal.sh --stage 9 --stop-state 9` -> `exp/asr_stats_raw/train/`: `speech_shape`, `text_shape.bpe`
+1. only once: `./run_minimal.sh --stage 9 --stop_stage 9` -> `exp/asr_stats_raw/train/`: `speech_shape`, `text_shape.bpe`
 2. `LRU_CACHE_CAPACITY=1 python ~/code/SPEECH/espnet/espnet2/bin/main.py` see [Memory leak when evaluating model on CPU with dynamic size tensor input](https://github.com/pytorch/pytorch/issues/29893) and [here](https://raberrytv.wordpress.com/2020/03/25/pytorch-free-your-memory/)
 
 ### files really needed
-* in `dump/raw/<dataset-name>`: `text`, `wav.scp`
+* in `dump/raw/<dataset-name>`: `text`, `wav.scp`, `feats_type` containing only `raw`
     
 ### strange things
 * normalization when reading audio-files; `1<<31` as denominator leads to same behavior as soundfile.read (which cannot read mp3)
