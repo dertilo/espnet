@@ -2,8 +2,10 @@ import os
 
 import argparse
 
+from espnet2.bin.tokenize_text import tokenize, get_parser
 from espnet2.tasks.asr import ASRTask
 from util import data_io, util_methods
+import sentencepiece as spm
 
 
 def build_manifest_files(
@@ -28,12 +30,49 @@ def build_manifest_files(
     data_io.write_file(f"{manifest_path}/feats_type", "raw")
 
 
-def dryrun_to_calc_stats(
-    train_set="debug_train", valid_set="debug_dev", test_sets="dev_clean"
-):
+def write_vocabulary(tokenizer_dir="data/token_list/bpe_unigram5000"):
+    cmd = (
+        f"--token_type bpe --input {tokenizer_dir}/train.txt --output {tokenizer_dir}/tokens.txt "
+        f"--bpemodel {tokenizer_dir}/bpe.model --field 2- --cleaner none --g2p none "
+        f"--write_vocabulary true "
+        f"--add_symbol '<blank>:0' --add_symbol '<unk>:1' --add_symbol '<sos/eos>:-1'"
+    )
+    parser = get_parser()
+    args = parser.parse_args(shlex.split(cmd))
+    kwargs = vars(args)
+    tokenize(**kwargs)
 
-    asr_config = "conf/tuning/train_asr_transformer_tiny.yaml"
-    inference_config = "conf/decode_asr.yaml"
+
+def train_tokenizer(vocab_size=5000, tokenizer_dir="data/token_list/bpe_unigram"):
+    tokenizer_dir=f"{tokenizer_dir}{vocab_size}"
+    os.makedirs(tokenizer_dir, exist_ok=True)
+    spm_args = dict(
+        input=(f"{tokenizer_dir}/train.txt"),
+        vocab_size=vocab_size,
+        model_type="unigram",
+        model_prefix=(f"{tokenizer_dir}/bpe"),
+        character_coverage=1.0,
+        input_sentence_size=100000000,
+    )
+    os.system(
+        f'<"dump/raw/debug_train/text" cut -f 2- -d" "  > data/token_list/bpe_unigram{vocab_size}/train.txt'
+    )
+
+    spm.SentencePieceTrainer.Train(
+        " ".join([f"--{k}={v}" for k, v in spm_args.items()])
+    )
+
+    write_vocabulary(tokenizer_dir)
+
+
+def dryrun_to_calc_stats(
+    train_set="debug_train",
+    valid_set="debug_dev",
+    test_sets="dev_clean",
+    nbpe=5000,
+    asr_config="conf/tuning/train_asr_transformer_tiny.yaml",
+    inference_config="conf/decode_asr.yaml",
+):
 
     cmd = f"""
     echo $(which python) &&
@@ -43,7 +82,7 @@ def dryrun_to_calc_stats(
     --use_lm false \
     --stage 9 \
     --stop_stage 9 \
-    --nbpe 5000 \
+    --nbpe {nbpe} \
     --max_wav_duration 30 \
     --asr_config {asr_config} \
     --inference_config {inference_config} \
@@ -52,7 +91,7 @@ def dryrun_to_calc_stats(
     --test_sets {test_sets} \
     --srctexts "data/{train_set}/text" "$@"
     """
-    # assert os.system(cmd)==0
+
     print(util_methods.exec_command(cmd))
 
 
@@ -62,25 +101,29 @@ if __name__ == "__main__":
     num_workers = 0
     tokenizer_path = "data/token_list/bpe_unigram5000"
     bpe_model = f"{tokenizer_path}/bpe.model"
-    valid_speech_shape = "exp/asr_stats_raw/valid/speech_shape"
-    valid_text_shape_bpe = "exp/asr_stats_raw/valid/text_shape.bpe"
+    stats_dir = "exp/asr_stats_raw"
     output_dir = "exp/asr_train_asr_transformer_tiny_raw_bpe"
     config = "conf/tuning/train_asr_transformer_tiny.yaml"
 
     # manifest_path = "/tmp/espnet_manifests"
-    manifest_path = 'dump/raw' # stupid asr.sh depends on this
+    manifest_path = "dump/raw"  # stupid asr.sh depends on this
 
-    train_name = 'debug_train'
-    valid_name = 'debug_valid'
+    train_name = "debug_train"
+    valid_name = "debug_valid"
 
     train_manifest_path = f"{manifest_path}/{train_name}"
     dev_manifest_path = f"{manifest_path}/{valid_name}"
     build_manifest_files(train_manifest_path)
     build_manifest_files(dev_manifest_path)
 
-    # dryrun_to_calc_stats(train_set=train_name, valid_set=valid_name)
-    # assert False
-    shape_path = "exp/asr_stats_raw/train"
+    vocab_size = 5000
+    tokenizer_dir="data/token_list/bpe_unigram"
+    if not os.path.isdir(tokenizer_dir):
+        train_tokenizer(vocab_size,tokenizer_dir)
+
+    if not os.path.isdir(stats_dir):
+        dryrun_to_calc_stats(train_set=train_name, valid_set=valid_name)
+
     num_gpus = 0
     is_distributed = False
     argString = (
@@ -89,13 +132,16 @@ if __name__ == "__main__":
         f"--g2p none --non_linguistic_symbols none --cleaner none "
         f"--valid_data_path_and_name_and_type {dev_manifest_path}/wav.scp,speech,sound "
         f"--valid_data_path_and_name_and_type {dev_manifest_path}/text,text,text "
-        f"--valid_shape_file {valid_speech_shape} --valid_shape_file {valid_text_shape_bpe} "
         f"--resume true --fold_length 5000 --fold_length 150 "
         f"--output_dir {output_dir} --config {config} --frontend_conf fs=16k "
         f"--train_data_path_and_name_and_type {train_manifest_path}/wav.scp,speech,sound "
         f"--train_data_path_and_name_and_type {train_manifest_path}/text,text,text "
-        f"--train_shape_file {shape_path}/speech_shape "
-        f"--train_shape_file {shape_path}/text_shape.bpe "
+
+        f"--train_shape_file {stats_dir}/train/speech_shape "
+        f"--train_shape_file {stats_dir}/train/text_shape.bpe "
+        f"--valid_shape_file {stats_dir}/valid/speech_shape "
+        f"--valid_shape_file {stats_dir}/valid/text_shape.bpe "
+
         f"--ngpu {num_gpus} "
         f"--multiprocessing_distributed {is_distributed}"
     )
