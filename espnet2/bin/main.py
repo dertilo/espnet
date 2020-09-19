@@ -10,6 +10,10 @@ import shlex
 
 TRAIN = "train"
 VALID = "valid"
+MANIFESTS = "manifests"
+STATS = "stats"
+TRAINLOGS = "train_logs"
+TOKENIZER = "tokenizer"
 
 
 def build_manifest_files(
@@ -48,50 +52,49 @@ def write_vocabulary(tokenizer_dir="data/token_list/bpe_unigram5000"):
     tokenize(**kwargs)
 
 
-def train_tokenizer(vocab_size=5000, tokenizer_dir="data/token_list/bpe_unigram5000"):
+def train_tokenizer(out_path, vocab_size=5000):
+    td = f"{out_path}/{TOKENIZER}"
 
-    os.makedirs(tokenizer_dir, exist_ok=True)
+    os.makedirs(td, exist_ok=True)
     spm_args = dict(
-        input=(f"{tokenizer_dir}/train.txt"),
+        input=(f"{td}/train.txt"),
         vocab_size=vocab_size,
         model_type="unigram",
-        model_prefix=(f"{tokenizer_dir}/bpe"),
+        model_prefix=(f"{td}/bpe"),
         character_coverage=1.0,
         input_sentence_size=100000000,
     )
     os.system(
-        f'<"{train_manifest_path}/text" cut -f 2- -d" "  > {tokenizer_dir}/train.txt'
+        f'<"{out_path}/{MANIFESTS}/{TRAIN}/text" cut -f 2- -d" "  > {td}/train.txt'
     )
 
     spm.SentencePieceTrainer.Train(
         " ".join([f"--{k}={v}" for k, v in spm_args.items()])
     )
 
-    write_vocabulary(tokenizer_dir)
+    write_vocabulary(td)
 
 
 def run_asr_task(
-    base_path,
+    output_path,
     config,
     num_gpus=0,
     is_distributed=False,
     num_workers=0,
     collect_stats=False,
 ):
+    sp = f"{output_path}/{STATS}"
 
-    output_dir = (
-        stats_dir
-        if collect_stats
-        else f"{base_path}/{config.split('/')[-1].replace('.yaml', '')}"
-    )
+    output_dir = sp if collect_stats else f"{output_path}/{TRAINLOGS}"
+    mp = f"{output_path}/{MANIFESTS}"
     argString = (
         f"--collect_stats {collect_stats} "
         f"--use_preprocessor true "
-        f"--bpemodel {tokenizer_path}/bpe.model "
+        f"--bpemodel {output_path}/{TOKENIZER}/bpe.model "
         f"--seed 42 "
         f"--num_workers {num_workers} "
         f"--token_type bpe "
-        f"--token_list {tokenizer_path}/tokens.txt "
+        f"--token_list {output_path}/{TOKENIZER}/tokens.txt "
         f"--g2p none "
         f"--non_linguistic_symbols none "
         f"--cleaner none "
@@ -101,24 +104,24 @@ def run_asr_task(
         f"--config {config} "
         f"--frontend_conf fs=16k "
         f"--output_dir {output_dir} "
-        f"--train_data_path_and_name_and_type {train_manifest_path}/wav.scp,speech,sound "
-        f"--train_data_path_and_name_and_type {train_manifest_path}/text,text,text "
-        f"--valid_data_path_and_name_and_type {dev_manifest_path}/wav.scp,speech,sound "
-        f"--valid_data_path_and_name_and_type {dev_manifest_path}/text,text,text "
+        f"--train_data_path_and_name_and_type {mp}/{TRAIN}/wav.scp,speech,sound "
+        f"--train_data_path_and_name_and_type {mp}/{TRAIN}/text,text,text "
+        f"--valid_data_path_and_name_and_type {mp}/{VALID}/wav.scp,speech,sound "
+        f"--valid_data_path_and_name_and_type {mp}/{VALID}/text,text,text "
         f"--ngpu {num_gpus} "
         f"--multiprocessing_distributed {is_distributed} "
     )
     if not collect_stats:
         argString += (
-            f"--train_shape_file {stats_dir}/train/speech_shape "
-            f"--train_shape_file {stats_dir}/train/text_shape "
-            f"--valid_shape_file {stats_dir}/valid/speech_shape "
-            f"--valid_shape_file {stats_dir}/valid/text_shape "
+            f"--train_shape_file {sp}/train/speech_shape "
+            f"--train_shape_file {sp}/train/text_shape "
+            f"--valid_shape_file {sp}/valid/speech_shape "
+            f"--valid_shape_file {sp}/valid/text_shape "
         )
     else:
         argString += (
-            f"--train_shape_file {train_manifest_path}/wav.scp "
-            f"--valid_shape_file {dev_manifest_path}/wav.scp "
+            f"--train_shape_file {mp}/{TRAIN}/wav.scp "
+            f"--valid_shape_file {mp}/{VALID}/wav.scp "
         )
     parser = ASRTask.get_parser()
     args = parser.parse_args(shlex.split(argString))
@@ -126,29 +129,27 @@ def run_asr_task(
 
 
 def run_espnet(
-    train_path, valid_path,
+    train_path,
+    valid_path,
+    out_path,
     vocab_size=500,
     limit=200,  # just for debug
     config="conf/tuning/train_asr_transformer_tiny.yaml",
     num_workers=0,
     num_gpus=0,
 ):
-    global tokenizer_path, stats_dir, train_manifest_path, dev_manifest_path
-    base_path = "/tmp/espnet_data"
-    tokenizer_path = f"{base_path}/bpe_tokenizer_unigram_{vocab_size}"
-    stats_dir = f"{base_path}/stats"
-    manifest_path = f"{base_path}/manifests"
-    train_manifest_path = f"{manifest_path}/{TRAIN}"
-    dev_manifest_path = f"{manifest_path}/{VALID}"
-    build_manifest_files(train_manifest_path,train_path, limit=limit)
-    build_manifest_files(dev_manifest_path,valid_path, limit=limit)
-    if not os.path.isdir(tokenizer_path):
-        train_tokenizer(vocab_size, tokenizer_path)
-    if not os.path.isdir(stats_dir):
-        run_asr_task(base_path, config, collect_stats=True)
+
+    build_manifest_files(f"{out_path}/{MANIFESTS}/{TRAIN}", train_path, limit=limit)
+    build_manifest_files(f"{out_path}/{MANIFESTS}/{VALID}", valid_path, limit=limit)
+
+    if not os.path.isdir(f"{out_path}/{TOKENIZER}"):
+        train_tokenizer(out_path,vocab_size)
+
+    if not os.path.isdir(f"{out_path}/{STATS}"):
+        run_asr_task(out_path, config, collect_stats=True)
 
     run_asr_task(
-        base_path,
+        out_path,
         config,
         num_workers=num_workers,
         num_gpus=num_gpus,
