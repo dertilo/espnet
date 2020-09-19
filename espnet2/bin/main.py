@@ -8,15 +8,18 @@ from util import data_io, util_methods
 import sentencepiece as spm
 import shlex
 
+TRAIN = "train"
+VALID = "valid"
+
 
 def build_manifest_files(
     manifest_path="/tmp",
-    dataset_path="/home/tilo/data/asr_data/ENGLISH/LibriSpeech/dev-clean_preprocessed",
+    dataset_path="some-wehre/dev-clean_preprocessed",
     limit=None,  # just for debug
 ):
     os.makedirs(manifest_path, exist_ok=True)
-
-    g = data_io.read_jsonl(f"{dataset_path}/manifest.jsonl.gz", limit=limit)
+    manifest_file = f"{dataset_path}/manifest.jsonl.gz"
+    g = data_io.read_jsonl(manifest_file, limit=limit)
     data_io.write_lines(
         f"{manifest_path}/wav.scp",
         (
@@ -24,7 +27,7 @@ def build_manifest_files(
             for d in g
         ),
     )
-    g = data_io.read_jsonl(f"{dataset_path}/manifest.jsonl.gz", limit=limit)
+    g = data_io.read_jsonl(manifest_file, limit=limit)
     data_io.write_lines(
         f"{manifest_path}/text",
         (f"{d['audio_file'].replace('.mp3', '')}\t{d['text']}" for d in g),
@@ -68,9 +71,19 @@ def train_tokenizer(vocab_size=5000, tokenizer_dir="data/token_list/bpe_unigram5
 
 
 def run_asr_task(
-    output_dir, num_gpus=0, is_distributed=False, num_workers=0, collect_stats=False
+    base_path,
+    config,
+    num_gpus=0,
+    is_distributed=False,
+    num_workers=0,
+    collect_stats=False,
 ):
 
+    output_dir = (
+        stats_dir
+        if collect_stats
+        else f"{base_path}/{config.split('/')[-1].replace('.yaml', '')}"
+    )
     argString = (
         f"--collect_stats {collect_stats} "
         f"--use_preprocessor true "
@@ -113,6 +126,7 @@ def run_asr_task(
 
 
 def run_espnet(
+    train_path, valid_path,
     vocab_size=500,
     limit=200,  # just for debug
     config="conf/tuning/train_asr_transformer_tiny.yaml",
@@ -124,20 +138,19 @@ def run_espnet(
     tokenizer_path = f"{base_path}/bpe_tokenizer_unigram_{vocab_size}"
     stats_dir = f"{base_path}/stats"
     manifest_path = f"{base_path}/manifests"
-    train_name = "debug_train"
-    valid_name = "debug_valid"
-    train_manifest_path = f"{manifest_path}/{train_name}"
-    dev_manifest_path = f"{manifest_path}/{valid_name}"
-    build_manifest_files(train_manifest_path, limit=limit)
-    build_manifest_files(dev_manifest_path, limit=limit)
+    train_manifest_path = f"{manifest_path}/{TRAIN}"
+    dev_manifest_path = f"{manifest_path}/{VALID}"
+    build_manifest_files(train_manifest_path,train_path, limit=limit)
+    build_manifest_files(dev_manifest_path,valid_path, limit=limit)
     if not os.path.isdir(tokenizer_path):
         train_tokenizer(vocab_size, tokenizer_path)
     if not os.path.isdir(stats_dir):
-        run_asr_task(collect_stats=True, output_dir=f"{stats_dir}")
+        run_asr_task(base_path, config, collect_stats=True)
 
     run_asr_task(
+        base_path,
+        config,
         num_workers=num_workers,
-        output_dir=f"{base_path}/{config.split('/')[-1].replace('.yaml', '')}",
         num_gpus=num_gpus,
         is_distributed=False,
     )
